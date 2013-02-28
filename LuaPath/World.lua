@@ -28,7 +28,7 @@ function World:ctor(cellNum, coff)
     self.endPoint = nil
     self.cellNum = cellNum
     if coff == nil then
-        self.coff = 1000
+        self.coff = 100000
     else
         self.coff = coff
     end
@@ -44,16 +44,18 @@ end
 -- f = g+h
 function World:initCell()
     self.cells = {}
+    self.walls = {}
+    self.path = {}
     for x = 1, self.cellNum, 1 do
         for y = 1, self.cellNum, 1 do
             self.cells[x*self.coff+y] = {state=nil, fScore=nil, gScore=nil, hScore=nil, parent=nil}
         end
     end
     for i = 0, self.cellNum+1, 1 do
-        self.cells[0*self.coff+i] = {state=nil, fScore=nil, gScore=nil, hScore=nil, parent=nil}
-        self.cells[i*self.coff+0] = {state=nil, fScore=nil, gScore=nil, hScore=nil, parent=nil}
-        self.cells[(self.cellNum+1)*self.coff+i] = {state=nil, fScore=nil, gScore=nil, hScore=nil, parent=nil}
-        self.cells[i*self.coff+(self.cellNum+1)] = {state=nil, fScore=nil, gScore=nil, hScore=nil, parent=nil}
+        self.cells[0*self.coff+i] = {state='Wall', fScore=nil, gScore=nil, hScore=nil, parent=nil}
+        self.cells[i*self.coff+0] = {state='Wall', fScore=nil, gScore=nil, hScore=nil, parent=nil}
+        self.cells[(self.cellNum+1)*self.coff+i] = {state='Wall', fScore=nil, gScore=nil, hScore=nil, parent=nil}
+        self.cells[i*self.coff+(self.cellNum+1)] = {state='Wall', fScore=nil, gScore=nil, hScore=nil, parent=nil}
     end
 end
 function World:putStart(x, y)
@@ -67,6 +69,7 @@ end
 function World:putWall(x, y)
     print("putWall", x, y)
     self.cells[self:getKey(x, y)]['state'] = 'Wall'
+    table.insert(self.walls, {x, y})
 end
 -- 临边10 斜边 14
 function World:calcG(x, y)
@@ -187,7 +190,9 @@ function World:search()
 
     --获取openList 中第一个fScore
     while #(self.openList) > 0 do
+
         local fScore = heapq.heappop(self.openList)
+        print("listLen", #self.openList, fScore)
         local possible = self.pqDict[fScore]
         if #(possible) > 0 then
             local point = table.remove(possible) --这里可以加入随机性 在多个可能的点中选择一个点 用于改善路径的效果 
@@ -199,26 +204,28 @@ function World:search()
         end
     end
 
+    --包含从start到end的所有点
     local path = {self.endPoint}
     local parent = self.cells[self:getKey(self.endPoint[1], self.endPoint[2])]['parent']
+    print("getPath", parent)
     while parent ~= nil do
         local x, y = self:getXY(parent)
         table.insert(path, {x, y})
         if x == self.startPoint[1] and y == self.startPoint[2] then
-        
+            break    
         else
             self.cells[parent]['state'] = 'Path'
+            table.insert(self.path, {x, y})
         end
-        local x, y = self:getXY(parent)
-        table.insert(path, {x, y})
         parent = self.cells[parent]["parent"]
     end
     
     local temp = {}
-    for i = #path, 0, 1 do
-        table.insert(path[i])
+    for i = #path, 1, -1 do
+        table.insert(temp, path[i])
+        print(path[i][1], path[i][2])
     end
-
+    
     return temp
 end
 
@@ -270,6 +277,27 @@ function World:printCell()
         end
         print()
     end
+end
+function World:clearWorld()
+    if self.startPoint ~= nil then
+        self.cells[self:getKey(self.startPoint[1], self.startPoint[2])]['state'] = nil
+    end
+    if self.endPoint ~= nil then
+        self.cells[self:getKey(self.endPoint[1], self.endPoint[2])]['state'] = nil
+    end
+    --[[
+    for k, v in ipairs(self.walls) do
+        self.cells[self:getKey(v[1], v[2])]['state'] = nil
+    end
+    ]]--
+
+    for k, v in ipairs(self.path) do
+        self.cells[self:getKey(v[1], v[2])]['state'] = nil
+    end
+    self.startPoint = nil
+    self.endPoint = nil
+    --self.walls = {}
+    self.path = {}
 end
 
 
