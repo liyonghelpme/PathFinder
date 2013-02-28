@@ -70,6 +70,8 @@ class World(object):
 
         #private    
     def initCell(self):
+        self.path = {}
+        self.walls = {}
         self.cells = {}
         for x in xrange(0, self.cellNum+2):
             for y in xrange(0, self.cellNum+2):
@@ -119,6 +121,7 @@ class World(object):
     def putWall(self, x, y):
         #print "putWall", x, y
         self.cells[(x, y)]['state'] = 'Wall'
+        self.walls[(x, y)] = True
 
     def calcG(self, x, y):
         data = self.cells[(x, y)]
@@ -231,15 +234,28 @@ class World(object):
             if parent == self.startPoint:
                 break
             self.cells[parent]['state'] = 'Path'
+            self.path[parent] = True
+
             parent = self.cells[parent]["parent"]
+
 
         print "path"
         print path
         print len(path)
         return path
-
     def clearWorld(self):
-        pass
+        if self.startPoint != None:
+            self.cells[self.startPoint]['state'] = 'Empt'
+        if self.endPoint != None:
+            self.cells[self.endPoint]['state'] = 'Empt'
+        for i in self.walls:
+            self.cells[i]['state'] = 'Empt'
+        for i in self.path:
+            self.cells[i]['state'] = 'Empt'
+        self.path = {}
+        self.walls = {}
+        self.startPoint = None
+        self.endPoint = None
     def clearPath(self):
         pass
     

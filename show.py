@@ -71,11 +71,18 @@ while True:
         shift = key[pygame.K_LSHIFT] or key[pygame.K_RSHIFT]
         enter = key[pygame.K_RETURN]
         x, y = pygame.mouse.get_pos()
+        escape = key[pygame.K_ESCAPE]
 
         xIndex = x/cellSize
         yIndex = y/cellSize
 
-        if (xIndex, yIndex) in w.cells:
+        if escape:
+            beginDraw = False
+            tempStart = None
+            tempEnd = None
+            w.clearWorld()
+            
+        elif (xIndex, yIndex) in w.cells:
             if ctrl and leftClicked and tempStart == None:
                 tempStart = (xIndex, yIndex)
                 w.putStart(xIndex, yIndex)
@@ -87,5 +94,6 @@ while True:
             elif enter and tempStart and tempEnd and not beginDraw:
                 beginDraw = True
                 w.search()
+
 
     showBoard(w)
