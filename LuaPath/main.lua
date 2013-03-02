@@ -38,7 +38,12 @@ function love.load()
     world.cellSize = cellSize
     world:initCell()
 end
-
+--[[
+首先确定世界的startPoint endPoint
+接着搜索路径 path
+设定Body 的起始点 和 终点 startPoint endPoint
+设定Body的path  setPath  自动根据光线追踪的方法将路径转化成直线路径 保存在Body 的path属性里面
+]]--
 function love.draw()
     love.graphics.setBackgroundColor(128, 128, 128)
     love.graphics.print("hello world", 400, 300)

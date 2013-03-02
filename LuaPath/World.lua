@@ -219,6 +219,7 @@ function World:search()
         parent = self.cells[parent]["parent"]
     end
     
+    --返回的路径是拷贝的数据 防止world的数据污染
     local temp = {}
     for i = #path, 1, -1 do
         table.insert(temp, path[i])
