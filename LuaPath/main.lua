@@ -118,6 +118,19 @@ function love.draw()
 end
 ]]--
 
+--[[
+    设定世界的起始点
+    设定城墙
+    设定建筑物
+    回车 产生新的士兵 设置士兵的起始点
+
+    循环更新士兵状态：
+        doMove 
+            没有目标寻找下一个目标
+            有目标 设定路径
+            有路径沿着路径移动
+
+]]--
 function love.draw()
     drawBackground()
     local xIndex, yIndex = love.mouse.getPosition()
@@ -143,11 +156,6 @@ function love.draw()
             world:putWall(xIndex, yIndex)
         elseif enter and tempStart and not beginDraw then
             beginDraw = true
-            -- world:search()
-            -- world:findTarget()
-            -- tempBody = Body.new(world)
-            -- tempBody:setStartEnd(world.startPoint, world.endPoint)
-            -- tempBody:setPath(world.path)
             tempBody = Body.new(world)
             tempBody:setStartEnd(world.startPoint, nil)
         end
