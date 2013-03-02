@@ -215,7 +215,6 @@ function World:search()
             break    
         else
             self.cells[parent]['state'] = 'Path'
-            table.insert(self.path, {x, y})
         end
         parent = self.cells[parent]["parent"]
     end
@@ -224,8 +223,9 @@ function World:search()
     for i = #path, 1, -1 do
         table.insert(temp, path[i])
         print(path[i][1], path[i][2])
+        table.insert(self.path, {path[i][1], path[i][2]})
     end
-    
+
     return temp
 end
 
