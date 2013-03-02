@@ -43,6 +43,7 @@ end
 -- h 启发从当前位置到目标位置的开销
 -- f = g+h
 function World:initCell()
+    self.buildings = {}
     self.cells = {}
     self.walls = {}
     self.path = {}
@@ -66,6 +67,18 @@ function World:putEnd(x, y)
     self.endPoint = {x, y}
     self.cells[self:getKey(x, y)]['state'] = 'End'
 end
+function World:putBuilding(x, y)
+    self.buildings[self:getKey(x, y)] = true
+    self.cells[self:getKey(x, y)]['state'] = 'Building'
+end
+function World:destroyBuilding(build)
+    local x = build[1]
+    local y = build[2]
+    local k = self:getKey(x, y)
+    self.cells[k]['state'] = nil
+    self.buildings[k] = nil
+end
+
 function World:putWall(x, y)
     print("putWall", x, y)
     self.cells[self:getKey(x, y)]['state'] = 'Wall'
@@ -85,7 +98,13 @@ function World:calcG(x, y)
 end
 function World:calcH(x, y)
     local data = self.cells[self:getKey(x, y)]
-    data['hScore'] = (math.abs(self.endPoint[1]-x)+math.abs(self.endPoint[2]-y))*10
+    if self.mode == 'Search' then
+        data['hScore'] = (math.abs(self.endPoint[1]-x)+math.abs(self.endPoint[2]-y))*10
+    elseif self.mode == 'FindTarget' then
+        data['hScore'] = 0
+    else
+        data['hScore'] = 0
+    end
 end
 function World:calcF(x, y)
     local data = self.cells[self:getKey(x, y)]
@@ -177,8 +196,76 @@ function World:getXY(pos)
     return math.floor(pos/self.coff), pos%self.coff
 end
 
+function World:findTarget()
+    self.mode = "FindTarget"
+    return self:realMethod()
+end
+function World:realMethod()
+    self.openList = {}
+    self.pqDict = {}
+    self.closedList = {}
+
+    self.cells[self:getKey(self.startPoint[1], self.startPoint[2])]['gScore'] = 0
+    self:calcH(self.startPoint[1], self.startPoint[2])
+    self:calcF(self.startPoint[1], self.startPoint[2])
+    self:pushQueue(self.startPoint[1], self.startPoint[2])
+
+    --获取openList 中第一个fScore
+    while #(self.openList) > 0 do
+
+        local fScore = heapq.heappop(self.openList)
+        print("listLen", #self.openList, fScore)
+        local possible = self.pqDict[fScore]
+        if #(possible) > 0 then
+            local point = table.remove(possible) --这里可以加入随机性 在多个可能的点中选择一个点 用于改善路径的效果 
+            local x, y = self:getXY(point)
+            if self.mode == 'Search' then
+                if x == self.endPoint[1] and y == self.endPoint[2] then
+                    break
+                end
+            elseif self.mode == 'FindTarget' then
+                if self.cells[self:getKey(x, y)]['state'] == 'Building' then
+                    self.endPoint = {x, y} --程序设定一个目的点
+                    break
+                end
+            end
+            self:checkNeibor(x, y)
+        end
+    end
+    -- 没有找到最近的目标
+    if self.endPoint == nil then
+        return {}
+    end
+
+    --包含从start到end的所有点
+    local path = {self.endPoint}
+    local parent = self.cells[self:getKey(self.endPoint[1], self.endPoint[2])]['parent']
+    print("getPath", parent)
+    while parent ~= nil do
+        local x, y = self:getXY(parent)
+        table.insert(path, {x, y})
+        if x == self.startPoint[1] and y == self.startPoint[2] then
+            break    
+        else
+            self.cells[parent]['state'] = 'Path'
+        end
+        parent = self.cells[parent]["parent"]
+    end
+    
+    --返回的路径是拷贝的数据 防止world的数据污染
+    local temp = {}
+    for i = #path, 1, -1 do
+        table.insert(temp, path[i])
+        print(path[i][1], path[i][2])
+        table.insert(self.path, {path[i][1], path[i][2]})
+    end
+
+    return temp
+end
 
 function World:search()
+    self.mode = "Search"
+
     self.openList = {}
     self.pqDict = {}
     self.closedList = {}

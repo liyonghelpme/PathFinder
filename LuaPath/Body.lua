@@ -8,8 +8,15 @@ end
 function Body:setStartEnd(startPoint, endPoint)
     self.startPoint = startPoint
     self.endPoint = endPoint
-    self.position = {self.startPoint[1]*self.world.cellSize+self.world.cellSize/2, self.startPoint[2]*self.world.cellSize+self.world.cellSize/2}
     self.speed = 100
+    if endPoint == nil then
+        self.mode = "FindTarget"
+        --local path = self.world:findTarget()
+        --self:setPath(path)
+    else
+        self.mode = "Search"
+    end
+    -- self.position = {self.startPoint[1]*self.world.cellSize+self.world.cellSize/2, self.startPoint[2]*self.world.cellSize+self.world.cellSize/2}
 end
 -- 0 1 2 ray2 判断是否和网格相交 有wall的网格 如果不相交 则删除
 -- 没有相交 j+1 继续判断 直到 没有path点了
@@ -35,9 +42,13 @@ function Body:straighten()
 end
 -- 获取世界给的路径 进行拉直 设定实际的路径
 function Body:setPath(path)
+    --没有发现攻击目标
+    if #path == 0 then
+        return
+    end
+
     self.path = path
     self:straighten() -- 调整路径直线化
-
 
     self.curGrid = 1
     self.nextGrid = nil
@@ -80,8 +91,11 @@ function Body:doMove(delta)
         if self.passTime >= self.totalTime then
             self.curGrid = self.nextGrid
             self.nextGrid = self.curGrid + 1
-            if self.nextGrid > #self.path then
+            if self.nextGrid > #self.path then --摧毁目标
+                self.world:putStart(self.path[self.curGrid][1], self.path[self.curGrid][2])
+                self.world:destroyBuilding(self.path[self.curGrid])
                 self.nextGrid = nil
+
             else
                 self:calculateVelocity()             
             end
@@ -90,11 +104,19 @@ function Body:doMove(delta)
             self.position[2] = self.position[2] + self.velocity[2]*delta
             self.passTime = self.passTime + delta        
         end
+    else
+        --寻敌人模式
+        if self.mode == 'FindTarget' then
+            local path = self.world:findTarget()
+            self:setPath(path)
+        end
     end
 end
 function Body:draw()
-    love.graphics.setColor(205, 204, 102)
-    love.graphics.circle("fill", self.position[1], self.position[2], self.world.cellSize/3)
+    if self.position ~= nil then
+        love.graphics.setColor(205, 204, 102)
+        love.graphics.circle("fill", self.position[1], self.position[2], self.world.cellSize/3)
+    end
 
     if self.tarPos ~= nil then
         love.graphics.setColor(100, 0, 200)

@@ -27,6 +27,9 @@ local function showWorld()
             elseif d['state'] == 'Wall' then
                 love.graphics.setColor(0, 0, 0)
                 love.graphics.rectangle("fill", left, top, cellSize, cellSize)
+            elseif d['state'] == 'Building' then
+                love.graphics.setColor(255, 44, 44)
+                love.graphics.rectangle("fill", left, top, cellSize, cellSize)
             end
         end
     end
@@ -38,12 +41,24 @@ function love.load()
     world.cellSize = cellSize
     world:initCell()
 end
+local function drawBackground()
+    love.graphics.setBackgroundColor(128, 128, 128)
+    love.graphics.print("hello world", 400, 300)
+
+    love.graphics.setColor(0, 0, 0)
+    for i = 0, cellNum+1, 1 do
+        love.graphics.line(i*cellSize, 0, i*cellSize, (cellNum+2)*cellSize )
+        love.graphics.line(0, i*cellSize, (cellNum+2)*cellSize, i*cellSize )
+    end
+end
 --[[
 首先确定世界的startPoint endPoint
 接着搜索路径 path
 设定Body 的起始点 和 终点 startPoint endPoint
 设定Body的path  setPath  自动根据光线追踪的方法将路径转化成直线路径 保存在Body 的path属性里面
+A * 寻找到特定目标的路径
 ]]--
+--[[
 function love.draw()
     love.graphics.setBackgroundColor(128, 128, 128)
     love.graphics.print("hello world", 400, 300)
@@ -101,7 +116,49 @@ function love.draw()
     end
 
 end
+]]--
 
+function love.draw()
+    drawBackground()
+    local xIndex, yIndex = love.mouse.getPosition()
+    local leftClicked = love.mouse.isDown("l")
+    local rightClicked = love.mouse.isDown("r")
+    local ctrl = love.keyboard.isDown("lctrl") or love.keyboard.isDown("lctrl");
+    local shift = love.keyboard.isDown("lshift") or love.keyboard.isDown("lshift");
+    local enter = love.keyboard.isDown("return")
+    local escape = love.keyboard.isDown("escape")
+    local space = love.keyboard.isDown(" ")
+
+    xIndex = math.floor(xIndex/cellSize)
+    yIndex = math.floor(yIndex/cellSize)
+    
+    if xIndex >= 1 and xIndex <= cellNum and yIndex >= 1 and yIndex <= cellNum then
+        if ctrl and leftClicked and tempStart == nil then
+            print("start", xIndex, yIndex)
+            tempStart = {xIndex, yIndex}
+            world:putStart(xIndex, yIndex)
+        elseif ctrl and rightClicked then
+            world:putBuilding(xIndex, yIndex)
+        elseif shift and leftClicked and not beginDraw then
+            world:putWall(xIndex, yIndex)
+        elseif enter and tempStart and not beginDraw then
+            beginDraw = true
+            -- world:search()
+            -- world:findTarget()
+            -- tempBody = Body.new(world)
+            -- tempBody:setStartEnd(world.startPoint, world.endPoint)
+            -- tempBody:setPath(world.path)
+            tempBody = Body.new(world)
+            tempBody:setStartEnd(world.startPoint, nil)
+        end
+
+    end
+    showWorld()
+
+    if tempBody ~= nil then
+        tempBody:draw()
+    end
+end
 -- 绘制标准网格
 -- 放置墙体
 -- 回车确认
