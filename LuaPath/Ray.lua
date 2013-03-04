@@ -99,7 +99,8 @@ function Ray:checkCollision()
 
         table.insert(self.checkedGrid, {x, y})
         
-        if self.world.cells[self.world:getKey(x, y)]['state'] == 'Wall' then
+        local ldata = self.world.cells[self.world:getKey(x, y)]['state'] 
+        if ldata == 'Wall' or ldata == 'Building' or ldata == 'Resource' then
             return true
         end
     end

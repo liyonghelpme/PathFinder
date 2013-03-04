@@ -5,8 +5,10 @@ require "Body"
 --更新小孩的移动位置
 function love.update()
     local dt = love.timer.getDelta()
-    if tempBody ~= nil then
-        tempBody:update(dt)
+    if beginDraw then
+        for k, v in ipairs(bodys) do
+            v:update(dt)
+        end
     end
 end
 local function showWorld()
@@ -32,6 +34,9 @@ local function showWorld()
                 love.graphics.rectangle("fill", left, top, cellSize, cellSize)
             elseif d['state'] == 'SOLID' then
                 love.graphics.setColor(20, 20, 255)
+                love.graphics.rectangle("fill", left, top, cellSize, cellSize)
+            elseif d['state'] == 'Resource' then
+                love.graphics.setColor(255, 162, 0)
                 love.graphics.rectangle("fill", left, top, cellSize, cellSize)
             end
         end
@@ -134,6 +139,8 @@ end
             有路径沿着路径移动
 
 ]]--
+soldiers = {}
+bodys = {}
 function love.draw()
     drawBackground()
     local xIndex, yIndex = love.mouse.getPosition()
@@ -144,30 +151,40 @@ function love.draw()
     local enter = love.keyboard.isDown("return")
     local escape = love.keyboard.isDown("escape")
     local space = love.keyboard.isDown(" ")
+    local alt = love.keyboard.isDown("lalt") or love.keyboard.isDown("ralt")
+    local z = love.keyboard.isDown("z")
 
     xIndex = math.floor(xIndex/cellSize)
     yIndex = math.floor(yIndex/cellSize)
     
     if xIndex >= 1 and xIndex <= cellNum and yIndex >= 1 and yIndex <= cellNum then
-        if ctrl and leftClicked and tempStart == nil then
+        if z and leftClicked then
+            world:putResource(xIndex, yIndex)
+        elseif z and rightClicked then
+            local tempBody = Body.new(world, 'Resource')
+            tempBody:setStartEnd({xIndex, yIndex}, nil)
+            table.insert(bodys, tempBody)
+        elseif  shift and rightClicked then
+            local tempBody = Body.new(world, "Bomb")
+            tempBody:setStartEnd({xIndex, yIndex}, nil)
+            table.insert(bodys, tempBody)
+        elseif ctrl and leftClicked then
             print("start", xIndex, yIndex)
-            tempStart = {xIndex, yIndex}
-            world:putStart(xIndex, yIndex)
+            local tempBody = Body.new(world, "Normal")
+            tempBody:setStartEnd({xIndex, yIndex}, nil)
+            table.insert(bodys, tempBody)
         elseif ctrl and rightClicked then
             world:putBuilding(xIndex, yIndex)
         elseif shift and leftClicked and not beginDraw then
             world:putWall(xIndex, yIndex)
-        elseif enter and tempStart and not beginDraw then
+        elseif enter and not beginDraw then
             beginDraw = true
-            tempBody = Body.new(world)
-            tempBody:setStartEnd(world.startPoint, nil)
         end
 
     end
     showWorld()
-
-    if tempBody ~= nil then
-        tempBody:draw()
+    for k, v in ipairs(bodys) do
+        v:draw()
     end
 end
 -- 绘制标准网格

@@ -1,22 +1,23 @@
 require "Class"
 require "Ray"
 Body = class()
-function Body:ctor(world)
+function Body:ctor(world, kind)
     self.world = world
+    self.kind = kind
 end
 -- 设定移动的开始位置和结束位置
-function Body:setStartEnd(startPoint, endPoint)
-    self.startPoint = startPoint
-    self.endPoint = endPoint
+function Body:setStartEnd(st, ed)
+    --print("setStartEnd", st, ed)
+    self.startPoint = st
+    self.endPoint = ed
     self.speed = 100
     if endPoint == nil then
         self.mode = "FindTarget"
-        --local path = self.world:findTarget()
-        --self:setPath(path)
     else
         self.mode = "Search"
     end
-    -- self.position = {self.startPoint[1]*self.world.cellSize+self.world.cellSize/2, self.startPoint[2]*self.world.cellSize+self.world.cellSize/2}
+    --print("setBody startEnd", self.startPoint[1], self.startPoint[2])
+    self.position = {self.startPoint[1]*self.world.cellSize+self.world.cellSize/2, self.startPoint[2]*self.world.cellSize+self.world.cellSize/2}
 end
 -- 0 1 2 ray2 判断是否和网格相交 有wall的网格 如果不相交 则删除
 -- 没有相交 j+1 继续判断 直到 没有path点了
@@ -42,7 +43,7 @@ function Body:straighten()
 end
 -- 获取世界给的路径 进行拉直 设定实际的路径
 function Body:setPath(path)
-    print("Body setPath", #path)
+    --print("Body setPath", #path)
     --没有发现攻击目标
     if #path == 0 then
         return
@@ -81,19 +82,19 @@ function Body:calculateVelocity()
     self.totalTime = length/self.speed
     self.passTime = 0
 
-    print("calculateVelocity", curPos[1], curPos[2], nextPos[1], nextPos[2], vector[1], vector[2], length, self.totalTime)
-    print("velocit")
+    --print("calculateVelocity", curPos[1], curPos[2], nextPos[1], nextPos[2], vector[1], vector[2], length, self.totalTime)
+    --print("velocit")
 end
 -- 作为一个球体来绘制 并逐渐更新下一个位置
 -- return true false 来表示是否移动到目的地
 -- 怎么判断 牵引力 和 目标力？ 如何判定移动到了 目标位置？
 function Body:update(delta)
-    print("doMove", delta)
     if self.nextGrid ~= nil then
         if self.passTime >= self.totalTime then
             self.curGrid = self.nextGrid
             self.nextGrid = self.curGrid + 1
             if self.nextGrid > #self.path then --摧毁目标
+                self.startPoint = self.path[self.curGrid]
                 self.world:putStart(self.path[self.curGrid][1], self.path[self.curGrid][2])
                 self.world:destroyBuilding(self.path[self.curGrid])
                 self.nextGrid = nil
@@ -108,15 +109,32 @@ function Body:update(delta)
     else
         --寻敌人模式
         if self.mode == 'FindTarget' then
-            local path = self.world:findTarget()
+            self.world:putStart(self.startPoint[1], self.startPoint[2])
+            local path = self.world:findTarget(self)
             self.oldPath = path
             self:setPath(path)
         end
     end
 end
 function Body:draw()
+
+    if self.oldPath ~= nil then
+        for i = 2, #self.oldPath-1, 1 do
+            love.graphics.setColor(255, 175, 0)
+            local left = self.oldPath[i][1]*self.world.cellSize
+            local top = self.oldPath[i][2]*self.world.cellSize
+            love.graphics.rectangle("fill", left, top, self.world.cellSize, self.world.cellSize)
+        end
+    end
+
     if self.position ~= nil then
-        love.graphics.setColor(205, 204, 102)
+        if self.kind == 'Normal' then
+            love.graphics.setColor(205, 204, 102)
+        elseif self.kind == 'Bomb' then
+            love.graphics.setColor(255, 255, 20)
+        elseif self.kind == 'Resource' then
+            love.graphics.setColor(72, 191, 39)
+        end
         love.graphics.circle("fill", self.position[1], self.position[2], self.world.cellSize/3)
     end
     if self.tarPos ~= nil then
@@ -127,12 +145,5 @@ function Body:draw()
         love.graphics.setColor(20, 200, 20)
         love.graphics.line(self.position[1], self.position[2], self.position[1]+self.velocity[1], self.position[2]+self.velocity[2])
     end
-    if self.oldPath ~= nil then
-        for i = 1, #self.oldPath, 1 do
-            love.graphics.setColor(255, 175, 0)
-            local left = self.oldPath[i][1]*self.world.cellSize
-            local top = self.oldPath[i][2]*self.world.cellSize
-            love.graphics.rectangle("fill", left, top, self.world.cellSize, self.world.cellSize)
-        end
-    end
+
 end

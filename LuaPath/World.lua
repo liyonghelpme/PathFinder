@@ -56,6 +56,7 @@ end
 -- h 启发从当前位置到目标位置的开销
 -- f = g+h
 function World:initCell()
+    self.resources = {}
     self.buildings = {}
     self.cells = {}
     self.walls = {}
@@ -80,16 +81,22 @@ function World:putEnd(x, y)
     self.endPoint = {x, y}
     self.cells[self:getKey(x, y)]['state'] = 'End'
 end
+function World:putResource(x, y)
+    self.resources[self:getKey(x, y)] = true
+    self.cells[self:getKey(x, y)]['state'] = 'Resource'
+end
 function World:putBuilding(x, y)
     self.buildings[self:getKey(x, y)] = true
     self.cells[self:getKey(x, y)]['state'] = 'Building'
 end
+-- 可能摧毁普通建筑 或者 资源建筑
 function World:destroyBuilding(build)
     local x = build[1]
     local y = build[2]
     local k = self:getKey(x, y)
     self.cells[k]['state'] = nil
     self.buildings[k] = nil
+    self.resources[k] = nil
 end
 
 function World:putWall(x, y)
@@ -105,10 +112,16 @@ function World:calcG(x, y)
     local difY = math.abs(parent%self.coff-y)
     local dist = 10
     -- 绕过墙体的权值 5 个墙体
-    if data['state'] == 'Wall' then
-        dist = 50
-    elseif difX > 0 and difY > 0 then
-        dist = 14
+    if self.searchSoldierKind == 'Normal' or self.searchSoldierKind == 'Resource' then
+        if data['state'] == 'Wall' then
+            dist = 50
+        elseif difX > 0 and difY > 0 then
+            dist = 14
+        end
+    elseif self.searchSoldierKind == 'Bomb' then
+        if difX > 0 and difY > 0 then
+            dist = 14
+        end
     end
     data['gScore'] = self.cells[parent]['gScore']+dist
 end
@@ -117,7 +130,24 @@ function World:calcH(x, y)
     if self.mode == 'Search' then
         data['hScore'] = (math.abs(self.endPoint[1]-x)+math.abs(self.endPoint[2]-y))*10
     elseif self.mode == 'FindTarget' then
-        data['hScore'] = 0
+        if self.searchSoldierKind == 'Resource' then --地精选择最靠经资源建筑的路径
+            local minDistance = self.cellNum*2 --最远的距离
+            for k, v in pairs(self.resources) do
+                local rx, ry = self:getXY(k) 
+                local dist = math.abs(rx-x)+math.abs(ry-y)
+                if dist < minDistance then
+                    minDistance = dist
+                end
+            end
+            data['hScore'] = minDistance*10 
+            -- 寻找资源的士兵应该要绕过路径上的资源建筑
+            -- 最差的情况下 斜对角线 绕过去
+            if self.cells[self:getKey(x, y)]['state'] == 'Building' then
+                data['hScore'] = data['hScore'] + 30
+            end
+        else
+            data['hScore'] = 0
+        end
     else
         data['hScore'] = 0
     end
@@ -215,8 +245,9 @@ function World:getXY(pos)
 end
 
 --返回到达第一个需要攻击的目标的路径 可能是墙体 或者建筑物
-function World:findTarget()
+function World:findTarget(soldier)
     self.mode = "FindTarget"
+    self.searchSoldierKind = soldier.kind
     return self:realMethod()
 end
 function World:realMethod()
@@ -235,6 +266,7 @@ function World:realMethod()
         --print("listLen", #self.openList, fScore)
         local possible = self.pqDict[fScore]
         if #(possible) > 0 then
+
             local point = table.remove(possible) --这里可以加入随机性 在多个可能的点中选择一个点 用于改善路径的效果 
             local x, y = self:getXY(point)
             if self.mode == 'Search' then
@@ -242,9 +274,22 @@ function World:realMethod()
                     break
                 end
             elseif self.mode == 'FindTarget' then
-                if self.cells[self:getKey(x, y)]['state'] == 'Building' then
-                    self.endPoint = {x, y} --程序设定一个目的点
-                    break
+                local key = self:getKey(x, y)
+                if self.searchSoldierKind == 'Resource' then
+                    if self.cells[key]['state'] == 'Building' or self.cells[key]['state'] == 'Resource' then
+                        self.endPoint = {x, y} --程序设定一个目的点
+                        break
+                    end
+                elseif self.searchSoldierKind == 'Normal' then
+                    if self.cells[key]['state'] == 'Building' or self.cells[key]['state'] == 'Resource' then
+                        self.endPoint = {x, y} --程序设定一个目的点
+                        break
+                    end
+                elseif self.searchSoldierKind == 'Bomb' then --对于炸弹人来讲 城墙也是攻击目标
+                    if self.cells[key]['state'] == 'Wall' or self.cells[key]['state'] == 'Building' or self.cells[key]['state'] == 'Resource' then
+                        self.endPoint = {x, y}
+                        break
+                    end
                 end
             end
             self:checkNeibor(x, y)
