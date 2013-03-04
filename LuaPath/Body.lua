@@ -42,6 +42,7 @@ function Body:straighten()
 end
 -- 获取世界给的路径 进行拉直 设定实际的路径
 function Body:setPath(path)
+    print("Body setPath", #path)
     --没有发现攻击目标
     if #path == 0 then
         return
@@ -86,7 +87,8 @@ end
 -- 作为一个球体来绘制 并逐渐更新下一个位置
 -- return true false 来表示是否移动到目的地
 -- 怎么判断 牵引力 和 目标力？ 如何判定移动到了 目标位置？
-function Body:doMove(delta)
+function Body:update(delta)
+    print("doMove", delta)
     if self.nextGrid ~= nil then
         if self.passTime >= self.totalTime then
             self.curGrid = self.nextGrid
@@ -95,7 +97,6 @@ function Body:doMove(delta)
                 self.world:putStart(self.path[self.curGrid][1], self.path[self.curGrid][2])
                 self.world:destroyBuilding(self.path[self.curGrid])
                 self.nextGrid = nil
-
             else
                 self:calculateVelocity()             
             end
@@ -108,6 +109,7 @@ function Body:doMove(delta)
         --寻敌人模式
         if self.mode == 'FindTarget' then
             local path = self.world:findTarget()
+            self.oldPath = path
             self:setPath(path)
         end
     end
@@ -117,7 +119,6 @@ function Body:draw()
         love.graphics.setColor(205, 204, 102)
         love.graphics.circle("fill", self.position[1], self.position[2], self.world.cellSize/3)
     end
-
     if self.tarPos ~= nil then
         love.graphics.setColor(100, 0, 200)
         love.graphics.circle("fill", self.tarPos[1], self.tarPos[2], self.world.cellSize/3)
@@ -125,5 +126,13 @@ function Body:draw()
     if self.velocity ~= nil then
         love.graphics.setColor(20, 200, 20)
         love.graphics.line(self.position[1], self.position[2], self.position[1]+self.velocity[1], self.position[2]+self.velocity[2])
+    end
+    if self.oldPath ~= nil then
+        for i = 1, #self.oldPath, 1 do
+            love.graphics.setColor(255, 175, 0)
+            local left = self.oldPath[i][1]*self.world.cellSize
+            local top = self.oldPath[i][2]*self.world.cellSize
+            love.graphics.rectangle("fill", left, top, self.world.cellSize, self.world.cellSize)
+        end
     end
 end

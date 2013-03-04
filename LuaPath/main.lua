@@ -6,7 +6,7 @@ require "Body"
 function love.update()
     local dt = love.timer.getDelta()
     if tempBody ~= nil then
-        tempBody:doMove(dt)
+        tempBody:update(dt)
     end
 end
 local function showWorld()
@@ -29,6 +29,9 @@ local function showWorld()
                 love.graphics.rectangle("fill", left, top, cellSize, cellSize)
             elseif d['state'] == 'Building' then
                 love.graphics.setColor(255, 44, 44)
+                love.graphics.rectangle("fill", left, top, cellSize, cellSize)
+            elseif d['state'] == 'SOLID' then
+                love.graphics.setColor(20, 20, 255)
                 love.graphics.rectangle("fill", left, top, cellSize, cellSize)
             end
         end

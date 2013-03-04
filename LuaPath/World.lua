@@ -22,6 +22,19 @@ w:putEnd(x, y)
 w:putWall(x, y)
 path = w:search()
 
+
+Body 对象在不断的更新状态update：
+    空闲状态  没有下一个移动目标 则 调用World的findTarget 寻找攻击目标
+    移动状态  有下一个移动目标 则 沿着路径获取下一个移动目标点， 到达目标之后，切换到下一个移动目标
+
+World记录世界状态 cellNum cellSize:
+    网格状态:
+        边界 SOLID 
+        墙体 Wall
+        建筑物 Building
+    findTarget:
+        寻找建筑物， 如果路径上有Wall 则 cost = 50  这个值可以用来设定选择绕过墙体还是攻击墙体 50表示最多绕过5个格子
+        设定目标结束后如果目标路径上是墙体则 路径只到第一个墙体就可以了， 士兵需要先摧毁第一个墙体，再重新开始寻找下一个攻击目标
 ]]--
 function World:ctor(cellNum, coff)
     self.startPoint = nil
@@ -53,10 +66,10 @@ function World:initCell()
         end
     end
     for i = 0, self.cellNum+1, 1 do
-        self.cells[0*self.coff+i] = {state='Wall', fScore=nil, gScore=nil, hScore=nil, parent=nil}
-        self.cells[i*self.coff+0] = {state='Wall', fScore=nil, gScore=nil, hScore=nil, parent=nil}
-        self.cells[(self.cellNum+1)*self.coff+i] = {state='Wall', fScore=nil, gScore=nil, hScore=nil, parent=nil}
-        self.cells[i*self.coff+(self.cellNum+1)] = {state='Wall', fScore=nil, gScore=nil, hScore=nil, parent=nil}
+        self.cells[0*self.coff+i] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil}
+        self.cells[i*self.coff+0] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil}
+        self.cells[(self.cellNum+1)*self.coff+i] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil}
+        self.cells[i*self.coff+(self.cellNum+1)] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil}
     end
 end
 function World:putStart(x, y)
@@ -91,7 +104,10 @@ function World:calcG(x, y)
     local difX = math.abs(math.floor(parent/self.coff)-x)
     local difY = math.abs(parent%self.coff-y)
     local dist = 10
-    if difX > 0 and difY > 0 then
+    -- 绕过墙体的权值 5 个墙体
+    if data['state'] == 'Wall' then
+        dist = 50
+    elseif difX > 0 and difY > 0 then
         dist = 14
     end
     data['gScore'] = self.cells[parent]['gScore']+dist
@@ -135,7 +151,9 @@ function World:checkNeibor(x, y)
 
     for n, nv in ipairs(neibors) do
         local key = self:getKey(nv[1], nv[2]) 
-        if self.cells[key]['state'] ~= 'Wall' and self.closedList[key] == nil then
+        -- 墙体可以摧毁self.cells[key]['state'] ~= 'Wall' and 
+        -- 边缘墙体完全不能穿透
+        if self.closedList[key] == nil and self.cells[key]['state'] ~= 'SOLID' then
             -- 检测是否已经在 openList 里面了
             local nS = self.cells[key]['fScore']
             local inOpen = false
@@ -196,6 +214,7 @@ function World:getXY(pos)
     return math.floor(pos/self.coff), pos%self.coff
 end
 
+--返回到达第一个需要攻击的目标的路径 可能是墙体 或者建筑物
 function World:findTarget()
     self.mode = "FindTarget"
     return self:realMethod()
@@ -212,9 +231,8 @@ function World:realMethod()
 
     --获取openList 中第一个fScore
     while #(self.openList) > 0 do
-
         local fScore = heapq.heappop(self.openList)
-        print("listLen", #self.openList, fScore)
+        --print("listLen", #self.openList, fScore)
         local possible = self.pqDict[fScore]
         if #(possible) > 0 then
             local point = table.remove(possible) --这里可以加入随机性 在多个可能的点中选择一个点 用于改善路径的效果 
@@ -241,23 +259,38 @@ function World:realMethod()
     local path = {self.endPoint}
     local parent = self.cells[self:getKey(self.endPoint[1], self.endPoint[2])]['parent']
     print("getPath", parent)
+    --不能变更状态为PATH 如果是墙体的话
     while parent ~= nil do
         local x, y = self:getXY(parent)
         table.insert(path, {x, y})
         if x == self.startPoint[1] and y == self.startPoint[2] then
             break    
+        end
+        --[[
         else
             self.cells[parent]['state'] = 'Path'
         end
+        ]]--
         parent = self.cells[parent]["parent"]
     end
     
+
     --返回的路径是拷贝的数据 防止world的数据污染
+    --路径中如果有墙体则停止 首先摧毁墙体再继续移动
     local temp = {}
     for i = #path, 1, -1 do
-        table.insert(temp, path[i])
-        print(path[i][1], path[i][2])
-        table.insert(self.path, {path[i][1], path[i][2]})
+        local key = self:getKey(path[i][1], path[i][2])
+        local data = self.cells[key]
+        if data['state'] == 'Wall' then
+            table.insert(temp, path[i])
+            print("Break Wall", path[i][1], path[i][2])
+            table.insert(self.path, {path[i][1], path[i][2]})
+            break
+        else
+            table.insert(temp, path[i])
+            print(path[i][1], path[i][2])
+            table.insert(self.path, {path[i][1], path[i][2]})
+        end
     end
 
     return temp
@@ -265,56 +298,7 @@ end
 
 function World:search()
     self.mode = "Search"
-
-    self.openList = {}
-    self.pqDict = {}
-    self.closedList = {}
-
-    self.cells[self:getKey(self.startPoint[1], self.startPoint[2])]['gScore'] = 0
-    self:calcH(self.startPoint[1], self.startPoint[2])
-    self:calcF(self.startPoint[1], self.startPoint[2])
-    self:pushQueue(self.startPoint[1], self.startPoint[2])
-
-    --获取openList 中第一个fScore
-    while #(self.openList) > 0 do
-
-        local fScore = heapq.heappop(self.openList)
-        print("listLen", #self.openList, fScore)
-        local possible = self.pqDict[fScore]
-        if #(possible) > 0 then
-            local point = table.remove(possible) --这里可以加入随机性 在多个可能的点中选择一个点 用于改善路径的效果 
-            local x, y = self:getXY(point)
-            if x == self.endPoint[1] and y == self.endPoint[2] then
-                break
-            end
-            self:checkNeibor(x, y)
-        end
-    end
-
-    --包含从start到end的所有点
-    local path = {self.endPoint}
-    local parent = self.cells[self:getKey(self.endPoint[1], self.endPoint[2])]['parent']
-    print("getPath", parent)
-    while parent ~= nil do
-        local x, y = self:getXY(parent)
-        table.insert(path, {x, y})
-        if x == self.startPoint[1] and y == self.startPoint[2] then
-            break    
-        else
-            self.cells[parent]['state'] = 'Path'
-        end
-        parent = self.cells[parent]["parent"]
-    end
-    
-    --返回的路径是拷贝的数据 防止world的数据污染
-    local temp = {}
-    for i = #path, 1, -1 do
-        table.insert(temp, path[i])
-        print(path[i][1], path[i][2])
-        table.insert(self.path, {path[i][1], path[i][2]})
-    end
-
-    return temp
+    return self:realMethod()
 end
 
 function World:printCell()
