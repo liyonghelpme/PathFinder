@@ -2,12 +2,46 @@ require "World"
 require "Ray"
 require "Body"
 
+-- 作为一个球体来绘制 并逐渐更新下一个位置
+-- return true false 来表示是否移动到目的地
+-- 怎么判断 牵引力 和 目标力？ 如何判定移动到了 目标位置？
+local function updateBody(body, delta)
+    local self = body
+
+    if self.nextGrid ~= nil then
+        if self.passTime >= self.totalTime then
+            self.curGrid = self.nextGrid
+            self.nextGrid = self.curGrid + 1
+            if self.nextGrid > #self.path then --摧毁目标
+                self.startPoint = self.path[self.curGrid]
+                self.world:putStart(self.path[self.curGrid][1], self.path[self.curGrid][2])
+                self.world:destroyBuilding(self.path[self.curGrid])
+                self.nextGrid = nil
+            else
+                self:calculateVelocity()             
+            end
+        elseif self.nextGrid ~= nil then
+            self.position[1] = self.position[1] + self.velocity[1]*delta
+            self.position[2] = self.position[2] + self.velocity[2]*delta
+            self.passTime = self.passTime + delta        
+        end
+    else
+        --寻敌人模式
+        if self.mode == 'FindTarget' then
+            self.world:putStart(self.startPoint[1], self.startPoint[2])
+            local path = self.world:findTarget(self)
+            self.oldPath = path
+            self:setPath(path)
+        end
+    end
+end
+
 --更新小孩的移动位置
 function love.update()
     local dt = love.timer.getDelta()
     if beginDraw then
         for k, v in ipairs(bodys) do
-            v:update(dt)
+            updateBody(v, dt)
         end
     end
 end
@@ -59,72 +93,6 @@ local function drawBackground()
         love.graphics.line(0, i*cellSize, (cellNum+2)*cellSize, i*cellSize )
     end
 end
---[[
-首先确定世界的startPoint endPoint
-接着搜索路径 path
-设定Body 的起始点 和 终点 startPoint endPoint
-设定Body的path  setPath  自动根据光线追踪的方法将路径转化成直线路径 保存在Body 的path属性里面
-A * 寻找到特定目标的路径
-]]--
---[[
-function love.draw()
-    love.graphics.setBackgroundColor(128, 128, 128)
-    love.graphics.print("hello world", 400, 300)
-
-    love.graphics.setColor(0, 0, 0)
-    for i = 0, cellNum+1, 1 do
-        love.graphics.line(i*cellSize, 0, i*cellSize, (cellNum+2)*cellSize )
-        love.graphics.line(0, i*cellSize, (cellNum+2)*cellSize, i*cellSize )
-    end
-
-    local xIndex, yIndex = love.mouse.getPosition()
-    local leftClicked = love.mouse.isDown("l")
-    local rightClicked = love.mouse.isDown("r")
-    local ctrl = love.keyboard.isDown("lctrl") or love.keyboard.isDown("lctrl");
-    local shift = love.keyboard.isDown("lshift") or love.keyboard.isDown("lshift");
-    local enter = love.keyboard.isDown("return")
-    local escape = love.keyboard.isDown("escape")
-    local space = love.keyboard.isDown(" ")
-
-    xIndex = math.floor(xIndex/cellSize)
-    yIndex = math.floor(yIndex/cellSize)
-
-
-
-
-    if escape then
-        beginDraw = false
-        tempStart = nil
-        tempEnd = nil
-        world:clearWorld()
-    -- 开始绘制小球运动
-    elseif space and tempBody == nil then
-        tempBody = Body.new(world)
-        tempBody:setStartEnd(world.startPoint, world.endPoint)
-        tempBody:setPath(world.path)
-    elseif xIndex >= 1 and xIndex <= cellNum and yIndex >= 1 and yIndex <= cellNum then
-        if ctrl and leftClicked and tempStart == nil then
-            print("start", xIndex, yIndex)
-            tempStart = {xIndex, yIndex}
-            world:putStart(xIndex, yIndex)
-        elseif ctrl and rightClicked and tempEnd == nil then
-            tempEnd = {xIndex, yIndex}
-            world:putEnd(xIndex, yIndex)
-        elseif shift and leftClicked and not beginDraw then
-            world:putWall(xIndex, yIndex)
-        elseif enter and tempStart and tempEnd and not beginDraw then
-            beginDraw = true
-            world:search()
-        end
-    end
-    showWorld()
-
-    if tempBody ~= nil then
-        tempBody:draw()
-    end
-
-end
-]]--
 
 --[[
     设定世界的起始点
@@ -137,6 +105,77 @@ end
             没有目标寻找下一个目标
             有目标 设定路径
             有路径沿着路径移动
+
+]]--
+
+
+
+local function showBody(body)
+    local self = body
+    if self.oldPath ~= nil then
+        for i = 2, #self.oldPath-1, 1 do
+            love.graphics.setColor(255, 175, 0)
+            local left = self.oldPath[i][1]*self.world.cellSize
+            local top = self.oldPath[i][2]*self.world.cellSize
+            love.graphics.rectangle("fill", left, top, self.world.cellSize, self.world.cellSize)
+        end
+    end
+
+    if self.position ~= nil then
+        if self.kind == 'Normal' then
+            love.graphics.setColor(205, 204, 102)
+        elseif self.kind == 'Bomb' then
+            love.graphics.setColor(255, 255, 20)
+        elseif self.kind == 'Resource' then
+            love.graphics.setColor(72, 191, 39)
+        end
+        love.graphics.circle("fill", self.position[1], self.position[2], self.world.cellSize/3)
+    end
+    if self.tarPos ~= nil then
+        love.graphics.setColor(100, 0, 200)
+        love.graphics.circle("fill", self.tarPos[1], self.tarPos[2], self.world.cellSize/3)
+    end
+    if self.velocity ~= nil then
+        love.graphics.setColor(20, 200, 20)
+        love.graphics.line(self.position[1], self.position[2], self.position[1]+self.velocity[1], self.position[2]+self.velocity[2])
+    end
+
+end
+local function showBodys()
+    for k, v in ipairs(bodys) do
+        showBody(v)
+    end
+end
+
+
+--[[
+    建立世界
+    world = World.new()  
+    放置墙体
+    world:putWall(x, y)
+    放置建筑物
+    world:putBuilding(x, y)
+    放置资源建筑物
+    world:putResource(x, y)
+
+
+    生成士兵
+    tempBody = Body.new(world, type) 士兵类型包括3中: Normal普通近战  Bomb 炸弹人  Resource 掠夺资源士兵
+    设置士兵的位置
+    tempBody:setStartEnd({x, y}, nil)
+
+    士兵更新状态
+    updateBody
+    士兵处于空闲状态时:
+        设定世界的搜索起点参数 
+        self.world:putStart(self.startPoint[1], self.startPoint[2])
+        开始搜索 世界返回搜索路径
+        local path = self.world:findTarget(self)
+        self.oldPath = path  oldPath 用于调试时绘制世界的返回的路径
+        设定士兵的路径
+        self:setPath(path)
+    士兵处于移动状态时:
+        按照得到的直线路径 self.path 逐点移动即可
 
 ]]--
 soldiers = {}
@@ -183,45 +222,5 @@ function love.draw()
 
     end
     showWorld()
-    for k, v in ipairs(bodys) do
-        v:draw()
-    end
+    showBodys()
 end
--- 绘制标准网格
--- 放置墙体
--- 回车确认
--- 移动鼠标 绘制 从中心点到鼠标所在网格的 rayTrace 网格
---[[
-function love.draw()
-    love.graphics.setBackgroundColor(128, 128, 128)
-
-    love.graphics.setColor(0, 0, 0)
-    for i = 0, cellNum+1, 1 do
-        love.graphics.line(i*cellSize, 0, i*cellSize, (cellNum+2)*cellSize )
-        love.graphics.line(0, i*cellSize, (cellNum+2)*cellSize, i*cellSize )
-    end
-
-    local xIndex, yIndex = love.mouse.getPosition()
-    xIndex = math.floor(xIndex/cellSize)
-    yIndex = math.floor(yIndex/cellSize)
-    local ray = Ray.new({math.floor((cellNum+1)/2), math.floor((cellNum+1)/2)}, {xIndex, yIndex}, world)
-    ray:checkCollision()
-    
-    for i = 1, #ray.checkedGrid, 1 do
-        local x, y
-        x = ray.checkedGrid[i][1]
-        y = ray.checkedGrid[i][2]
-        love.graphics.setColor(20, 20, 200)
-        love.graphics.rectangle("line", x*cellSize, y*cellSize, cellSize, cellSize)
-    end
-
-    local lx0 = ray.a[1]*cellSize+cellSize/2
-    local ly0 = ray.a[2]*cellSize+cellSize/2
-    local lx1 = ray.b[1]*cellSize+cellSize/2
-    local ly1 = ray.b[2]*cellSize+cellSize/2
-    love.graphics.setColor(20, 200, 20)
-    love.graphics.line(lx0, ly0, lx1, ly1)
-
-    love.graphics.print(#ray.checkedGrid.." "..ray.count, 100, 100)
-end
-]]--
