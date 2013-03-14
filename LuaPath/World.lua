@@ -63,14 +63,14 @@ function World:initCell()
     self.path = {}
     for x = 1, self.cellNum, 1 do
         for y = 1, self.cellNum, 1 do
-            self.cells[x*self.coff+y] = {state=nil, fScore=nil, gScore=nil, hScore=nil, parent=nil}
+            self.cells[x*self.coff+y] = {state=nil, fScore=nil, gScore=nil, hScore=nil, parent=nil, hasWall=false}
         end
     end
     for i = 0, self.cellNum+1, 1 do
-        self.cells[0*self.coff+i] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil}
-        self.cells[i*self.coff+0] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil}
-        self.cells[(self.cellNum+1)*self.coff+i] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil}
-        self.cells[i*self.coff+(self.cellNum+1)] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil}
+        self.cells[0*self.coff+i] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil, hasWall=false}
+        self.cells[i*self.coff+0] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil, hasWall=false}
+        self.cells[(self.cellNum+1)*self.coff+i] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil, hasWall=false}
+        self.cells[i*self.coff+(self.cellNum+1)] = {state='SOLID', fScore=nil, gScore=nil, hScore=nil, parent=nil, hasWall=false}
     end
 end
 function World:putStart(x, y)
@@ -97,6 +97,13 @@ function World:destroyBuilding(build)
     self.cells[k]['state'] = nil
     self.buildings[k] = nil
     self.resources[k] = nil
+end
+-- 存在建筑物 或者墙体
+function World:checkHasBuilding(build)
+    local x = build[1]
+    local y = build[2]
+    local k = self:getKey(x, y)
+    return self.cells[k]['state'] ~= nil
 end
 
 function World:putWall(x, y)
@@ -178,11 +185,17 @@ function World:checkNeibor(x, y)
         {x-1, y+1},
         {x-1, y}
     }
-
+    local curPosHasWall = false
+    local curKey = self:getKey(x, y)
+    if self.cells[curKey]['hasWall'] or self.cells[curKey]['state'] == 'Wall' then
+        curPosHasWall = true
+    end
+        
     for n, nv in ipairs(neibors) do
         local key = self:getKey(nv[1], nv[2]) 
         -- 墙体可以摧毁self.cells[key]['state'] ~= 'Wall' and 
         -- 边缘墙体完全不能穿透
+        -- 该位置 之前没有遍历过
         if self.closedList[key] == nil and self.cells[key]['state'] ~= 'SOLID' then
             -- 检测是否已经在 openList 里面了
             local nS = self.cells[key]['fScore']
@@ -204,6 +217,7 @@ function World:checkNeibor(x, y)
                 local oldGScore = self.cells[key]['gScore']
                 local oldHScore = self.cells[key]['hScore']
                 local oldFScore = self.cells[key]['fScore']
+                local hasWall = self.cells[key]['hasWall']
 
                 self.cells[key]['parent'] = self:getKey(x, y)
                 self:calcG(nv[1], nv[2])
@@ -214,9 +228,11 @@ function World:checkNeibor(x, y)
                     self.cells[key]['gScore'] = oldGScore
                     self.cells[key]['hScore'] = oldHScore
                     self.cells[key]['fScore'] = oldFScore
+                    self.cells[key]['hasWall'] = hasWall
                 else -- 删除旧的自己的优先级队列 重新压入优先级队列
                     self:calcH(nv[1], nv[2])
                     self:calcF(nv[1], nv[2])
+                    self.cells[key]['hasWall'] = curPosHasWall
 
                     local oldPossible = self.pqDict[oldFScore]
                     for k, v in ipairs(oldPossible) do
@@ -233,6 +249,7 @@ function World:checkNeibor(x, y)
                 self:calcG(nv[1], nv[2])
                 self:calcH(nv[1], nv[2])
                 self:calcF(nv[1], nv[2])
+                self.cells[key]['hasWall'] = curPosHasWall
 
                 self:pushQueue(nv[1], nv[2])
             end
@@ -250,6 +267,13 @@ function World:findTarget(soldier)
     self.searchSoldierKind = soldier.kind
     return self:realMethod()
 end
+
+function World:bombFindBuilding(soldier)
+    self.mode = "BombFindBuilding"
+    self.searchSoldierKind = soldier.kind
+    return self:realMethod()
+end
+
 function World:realMethod()
     self.openList = {}
     self.pqDict = {}
@@ -265,16 +289,17 @@ function World:realMethod()
         local fScore = heapq.heappop(self.openList)
         --print("listLen", #self.openList, fScore)
         local possible = self.pqDict[fScore]
+        local bombFindBuilding = false
         if #(possible) > 0 then
 
             local point = table.remove(possible) --这里可以加入随机性 在多个可能的点中选择一个点 用于改善路径的效果 
             local x, y = self:getXY(point)
+            local key = point
             if self.mode == 'Search' then
                 if x == self.endPoint[1] and y == self.endPoint[2] then
                     break
                 end
             elseif self.mode == 'FindTarget' then
-                local key = self:getKey(x, y)
                 if self.searchSoldierKind == 'Resource' then
                     if self.cells[key]['state'] == 'Building' or self.cells[key]['state'] == 'Resource' then
                         self.endPoint = {x, y} --程序设定一个目的点
@@ -285,14 +310,27 @@ function World:realMethod()
                         self.endPoint = {x, y} --程序设定一个目的点
                         break
                     end
-                elseif self.searchSoldierKind == 'Bomb' then --对于炸弹人来讲 城墙也是攻击目标
-                    if self.cells[key]['state'] == 'Wall' or self.cells[key]['state'] == 'Building' or self.cells[key]['state'] == 'Resource' then
-                        self.endPoint = {x, y}
-                        break
+                elseif self.searchSoldierKind == 'Bomb' then --对于炸弹人来讲 需要寻找一个路径上有墙体的目标建筑 self.cells[key]['state'] == 'Wall' or
+                    if self.cells[key]['state'] == 'Building' or self.cells[key]['state'] == 'Resource' then
+                        if self.cells[key]['hasWall'] == true then
+                            self.endPoint = {x, y}
+                            break
+                        end
+                        bombFindBuilding = true
                     end
                 end
+            --炸弹人 没有找到需要翻越城墙才能攻击的建筑物 那么就找最近的建筑攻击即可
+            elseif self.mode == 'BombFindBuilding' then
+                if self.cells[key]['state'] == 'Building' or self.cells[key]['state'] == 'Resource' then
+                    self.endPoint = {x, y}
+                    break
+                end
             end
-            self:checkNeibor(x, y)
+            --炸弹人 找到一个 目标但是 目标路径没有城墙
+            --普通 士兵必须 拆掉城墙才可以 攻击 建筑目标 
+            if not bombFindBuilding then
+                self:checkNeibor(x, y)
+            end
         end
     end
     -- 没有找到最近的目标

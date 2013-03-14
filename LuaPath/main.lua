@@ -15,6 +15,16 @@ local function updateBody(body, delta)
             if self.nextGrid > #self.path then --摧毁目标
                 self.startPoint = self.path[self.curGrid]
                 self.world:putStart(self.path[self.curGrid][1], self.path[self.curGrid][2])
+                --炸弹人 自爆 从地图消失
+                if self.world:checkHasBuilding(self.path[self.curGrid]) and self.kind == 'Bomb' then
+                    for k, v in ipairs(bodys) do
+                        if v == self then
+                            table.remove(bodys, k)
+                            break
+                        end
+                    end
+                end
+
                 self.world:destroyBuilding(self.path[self.curGrid])
                 self.nextGrid = nil
             else
@@ -30,6 +40,14 @@ local function updateBody(body, delta)
         if self.mode == 'FindTarget' then
             self.world:putStart(self.startPoint[1], self.startPoint[2])
             local path = self.world:findTarget(self)
+            if #path == 0 then
+                -- 炸弹人 没有找到 含有 城墙的 攻击建筑物的路径
+                -- 再寻找普通的建筑物
+                if self.kind == 'Bomb' then
+                    path = self.world:bombFindBuilding(self)
+                end
+                print("no wall path, find normal Building", path)
+            end
             self.oldPath = path
             self:setPath(path)
         end
@@ -40,6 +58,7 @@ end
 function love.update()
     local dt = love.timer.getDelta()
     if beginDraw then
+        print("body Num", #bodys)
         for k, v in ipairs(bodys) do
             updateBody(v, dt)
         end
@@ -85,7 +104,7 @@ function love.load()
 end
 local function drawBackground()
     love.graphics.setBackgroundColor(128, 128, 128)
-    love.graphics.print("hello world", 400, 300)
+    --love.graphics.print("hello world", 400, 300)
 
     love.graphics.setColor(0, 0, 0)
     for i = 0, cellNum+1, 1 do
@@ -118,8 +137,12 @@ local function showBody(body)
             local left = self.oldPath[i][1]*self.world.cellSize
             local top = self.oldPath[i][2]*self.world.cellSize
             love.graphics.rectangle("fill", left, top, self.world.cellSize, self.world.cellSize)
+
         end
     end
+
+
+
 
     if self.position ~= nil then
         if self.kind == 'Normal' then
@@ -130,6 +153,9 @@ local function showBody(body)
             love.graphics.setColor(72, 191, 39)
         end
         love.graphics.circle("fill", self.position[1], self.position[2], self.world.cellSize/3)
+
+        love.graphics.setColor(255, 0, 0)
+        love.graphics.print(body.kind, self.position[1], self.position[2])
     end
     if self.tarPos ~= nil then
         love.graphics.setColor(100, 0, 200)
@@ -180,6 +206,8 @@ end
 ]]--
 soldiers = {}
 bodys = {}
+MapOccupy = {}
+
 function love.draw()
     drawBackground()
     local xIndex, yIndex = love.mouse.getPosition()
@@ -196,22 +224,38 @@ function love.draw()
     xIndex = math.floor(xIndex/cellSize)
     yIndex = math.floor(yIndex/cellSize)
     
+    -- shift right : bomb Body
+    -- shift left : wall
+    -- ctrl right: building 
     if xIndex >= 1 and xIndex <= cellNum and yIndex >= 1 and yIndex <= cellNum then
+        local key = world:getKey(xIndex, yIndex)
         if z and leftClicked then
             world:putResource(xIndex, yIndex)
         elseif z and rightClicked then
-            local tempBody = Body.new(world, 'Resource')
-            tempBody:setStartEnd({xIndex, yIndex}, nil)
-            table.insert(bodys, tempBody)
+            if MapOccupy[key] == nil then
+                print("put Resource")
+                local tempBody = Body.new(world, 'Resource')
+                tempBody:setStartEnd({xIndex, yIndex}, nil)
+                table.insert(bodys, tempBody)
+                MapOccupy[key] = true
+            end
         elseif  shift and rightClicked then
-            local tempBody = Body.new(world, "Bomb")
-            tempBody:setStartEnd({xIndex, yIndex}, nil)
-            table.insert(bodys, tempBody)
+            if MapOccupy[key] == nil then
+                print("put Bomb")
+                local tempBody = Body.new(world, "Bomb")
+                tempBody:setStartEnd({xIndex, yIndex}, nil)
+                table.insert(bodys, tempBody)
+                MapOccupy[key] = true
+            end
         elseif ctrl and leftClicked then
-            print("start", xIndex, yIndex)
-            local tempBody = Body.new(world, "Normal")
-            tempBody:setStartEnd({xIndex, yIndex}, nil)
-            table.insert(bodys, tempBody)
+            if MapOccupy[key] == nil then
+                print("put Normal")
+                print("start", xIndex, yIndex)
+                local tempBody = Body.new(world, "Normal")
+                tempBody:setStartEnd({xIndex, yIndex}, nil)
+                table.insert(bodys, tempBody)
+                MapOccupy[key] = true
+            end
         elseif ctrl and rightClicked then
             world:putBuilding(xIndex, yIndex)
         elseif shift and leftClicked and not beginDraw then

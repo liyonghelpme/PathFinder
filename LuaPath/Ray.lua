@@ -66,11 +66,13 @@ function Ray:checkCollision()
             t1 = 9999999
         end
 
+        --[[
         print("startGrid", x, y)
         print("dx, dy", dx, dy)
         print("p0 p1", p0, p1)
         print("tar", tar0, tar1)
         print("time", t0, t1)
+        ]]--
 
         
         --根据运动时间较小的得到最近的相邻网格
